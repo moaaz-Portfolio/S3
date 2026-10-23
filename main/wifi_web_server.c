@@ -322,3 +322,4 @@ esp_err_t wifi_web_server_start(esp_wifi_sensing_fsm_handle_t fsm, const uint8_t
 
     ESP_LOGI(TAG, "S3 Sense interface ready at http://drwalls.local");
     return ESP_OK;
+}
