@@ -1,0 +1,66 @@
+
+name: Build S3 Sense for ESP32-S3
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Get source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build ESP32-S3 firmware
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.5.5
+          target: esp32s3
+          path: .
+          command: idf.py build
+
+      - name: Check firmware
+        shell: bash
+        run: |
+          set -e
+          test -s build/S3Sense.bin
+          python3 -c "from pathlib import Path; import struct; p=Path('build/S3Sense.bin'); d=p.read_bytes(); assert d[0]==0xE9, 'Invalid firmware'; c=struct.unpack_from('<H',d,12)[0]; assert c==9, f'Wrong chip ID: {c}'; print('ESP32-S3 firmware verified')"
+
+      - name: Merge firmware
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.5.5
+          target: esp32s3
+          path: .
+          command: idf.py merge-bin -f raw
+
+      - name: Package browser flasher
+        shell: bash
+        run: |
+          set -e
+          test -s build/merged-binary.bin
+          mkdir -p dist/S3-Sense-Flash-Package/firmware
+          cp tools/flash/index.html dist/S3-Sense-Flash-Package/index.html
+          cp tools/flash/manifest.json dist/S3-Sense-Flash-Package/manifest.json
+          cp tools/flash/Start-Flash.bat dist/S3-Sense-Flash-Package/Start-Flash.bat
+          cp tools/flash/serve.ps1 dist/S3-Sense-Flash-Package/serve.ps1
+          cp tools/flash/README_AR.txt dist/S3-Sense-Flash-Package/README_AR.txt
+          cp tools/web_serial_monitor.html dist/S3-Sense-Flash-Package/monitor.html
+          cp build/merged-binary.bin dist/S3-Sense-Flash-Package/firmware/merged-firmware.bin
+          cp LICENSE dist/S3-Sense-Flash-Package/LICENSE.txt
+
+      - name: Upload flash package
+        uses: actions/upload-artifact@v4
+        with:
+          name: S3-Sense-Flash-Package
+          path: dist/S3-Sense-Flash-Package/
+          if-no-files-found: error
+          retention-days: 14
